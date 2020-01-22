@@ -29,7 +29,7 @@ from CA import CA
 
 
 def get_ldap_connection():
-    server = Server('192.168.1.53:389', get_info=ALL)
+    server = Server('192.168.43.54:389', get_info=ALL)
     conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
 
