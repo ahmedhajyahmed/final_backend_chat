@@ -1,9 +1,12 @@
+import ast
+import base64
 import hashlib
 import json
 import os
+import textwrap
 import uuid
 
-import OpenSSL
+
 from OpenSSL import crypto
 
 from ldap3 import Server, Connection, ALL
@@ -26,12 +29,12 @@ from CA import CA
 
 
 def get_ldap_connection():
-    server = Server('127.0.0.1:10389', get_info=ALL)
-    conn = Connection(server, 'cn=evoo,ou=Users,dc=example,dc=com', 'password', auto_bind=True)
+    server = Server('192.168.1.53:389', get_info=ALL)
+    conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
 
 
-class User():
+class User:
 
     @staticmethod
     def try_login(username, password):
@@ -39,11 +42,20 @@ class User():
         conn = get_ldap_connection()
         print('get connection')
         # conn.search('ou=Users,dc=example,dc=com', '(&(cn=%s)(userPassword=%s))' % (username, password))
-        conn.search('dc=example,dc=com', '(ou=Users)')
+        password = hashlib.sha256(password.encode()).hexdigest()
+        conn.search('dc=chatroom,dc=com', '(&(cn=%s)(userPassword=%s))' % (username, password),
+                    attributes=['userCertificate'])
         if conn.entries == []:
             return 'error not auth', 400
         else:
-            print(conn.entries[0].entry_to_json())
+            result_str = conn.entries[0].entry_to_json()
+            # print(json.loads(res.read()))
+            result_dict = ast.literal_eval(result_str)
+            cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
+            print(cert_base64)
+            cert_pem = _get_pem_from_der(cert_base64)
+            print(cert_pem)
+            CA.verify(cert_pem)
             return "success", 200
 
     @staticmethod
@@ -53,8 +65,8 @@ class User():
         path = 'clients/' + uid + '-' + cn
         os.mkdir(path, 777)
 
-        print(uid)
-        print(path)
+        # print(uid)
+        # print(path)
 
         private_key = generate_private_key()
         write_private_key(private_key, path=path)
@@ -70,19 +82,20 @@ class User():
         # print(cert)
         conn = get_ldap_connection()
 
-        conn.add('cn=%s,ou=Users,dc=example,dc=com' % cn, 'inetOrgPerson', {'givenName': givenName,
+        conn.add('cn=%s,ou=myusers,dc=chatroom,dc=com' % cn, 'inetOrgPerson', {'givenName': givenName,
                                                                             'sn': sn,
                                                                             'telephoneNumber': telephoneNumber,
                                                                             'userPassword': hashlib.sha256(
                                                                                 userPassword.encode()).hexdigest(),
                                                                             'uid': uid,
-                                                                            'userCertificate': cert_der
+                                                                            'userCertificate;binary': cert_der
                                                                             # 'userSMIMECertifcate': cert_der
                                                                             })
         # cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, pem_cert)
 
         result = conn.result['description']
         if result == 'sucess':
+            # print(conn.result.entry_to_json())
             return 'Success', 200
         else:
             return result, 400
@@ -147,3 +160,11 @@ def generate_and_write_csr(private_key, path, COMMON_NAME, COUNTRY_NAME="TN", ST
 
 def generate_random_id():
     return str(uuid.uuid4())[:8]
+
+def _get_pem_from_der(der):
+    """
+    Converts DER certificate to PEM.
+    """
+    return "\n".join(("-----BEGIN CERTIFICATE-----",
+        "\n".join(textwrap.wrap(der, 64)),
+        "-----END CERTIFICATE-----",))

@@ -5,6 +5,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization, hashes
 
+from OpenSSL import crypto
+
 
 class CA:
 
@@ -18,8 +20,8 @@ class CA:
         return csr
 
     @staticmethod
-    def load_ca_crt(path):
-        pem_cert = open(path, 'rb').read()
+    def load_ca_crt():
+        pem_cert = open('ca/ca.crt', 'rb').read()
         ca = x509.load_pem_x509_certificate(pem_cert, default_backend())
         return ca
 
@@ -32,7 +34,7 @@ class CA:
     @staticmethod
     def sign(csr, path):
 
-        ca_cert = CA.load_ca_crt('ca/ca.crt')
+        ca_cert = CA.load_ca_crt()
         ca_private_key = CA.load_ca_private_key('ca/ca.key')
 
         builder = x509.CertificateBuilder()
@@ -52,3 +54,44 @@ class CA:
         with open(path + '/cert.crt', 'wb') as f:
             f.write(certificate.public_bytes(serialization.Encoding.PEM))
         return certificate
+
+    @staticmethod
+    def verify(cert_crt):
+        # with open('client/cert.crt', 'r') as cert_file:
+        #     cert = cert_file.read()
+
+        # with open('./int-cert.pem', 'r') as int_cert_file:
+        #     int_cert = int_cert_file.read()
+
+        with open('ca/ca.crt', 'r') as root_cert_file:
+            ca_crt = root_cert_file.read()
+
+        trusted_certs = (ca_crt, ca_crt)
+        verified = CA.verify_chain_of_trust(cert_crt, trusted_certs)
+
+        if verified:
+            print('Certificate verified')
+        else:
+            print('not verified')
+
+    @staticmethod
+    def verify_chain_of_trust(cert_pem, trusted_cert_pems):
+        # traitement ici
+        certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+
+        # Create and fill a X509Sore with trusted certs
+        store = crypto.X509Store()
+        for trusted_cert_pem in trusted_cert_pems:
+            trusted_cert = crypto.load_certificate(crypto.FILETYPE_PEM, trusted_cert_pem)
+            store.add_cert(trusted_cert)
+
+        # Create a X590StoreContext with the cert and trusted certs
+        # and verify the the chain of trust
+        store_ctx = crypto.X509StoreContext(store, certificate)
+        # Returns None if certificate can be validated
+        result = store_ctx.verify_certificate()
+
+        if result is None:
+            return True
+        else:
+            return False
