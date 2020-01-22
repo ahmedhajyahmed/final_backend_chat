@@ -67,17 +67,19 @@ class CA:
             ca_crt = root_cert_file.read()
 
         trusted_certs = (ca_crt, ca_crt)
-        verified = CA.verify_chain_of_trust(cert_crt, trusted_certs)
+        verified, certificate = CA.verify_chain_of_trust(cert_crt, trusted_certs)
 
         if verified:
             print('Certificate verified')
         else:
             print('not verified')
+        return certificate
 
     @staticmethod
     def verify_chain_of_trust(cert_pem, trusted_cert_pems):
         # traitement ici
         certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+
 
         # Create and fill a X509Sore with trusted certs
         store = crypto.X509Store()
@@ -92,6 +94,6 @@ class CA:
         result = store_ctx.verify_certificate()
 
         if result is None:
-            return True
+            return True, certificate
         else:
-            return False
+            return False, None

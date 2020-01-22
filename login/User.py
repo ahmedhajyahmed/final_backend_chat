@@ -5,9 +5,11 @@ import json
 import os
 import textwrap
 import uuid
+import datetime
 
 
 from OpenSSL import crypto
+from flask_jwt_extended import create_access_token
 
 from ldap3 import Server, Connection, ALL
 
@@ -29,7 +31,7 @@ from CA import CA
 
 
 def get_ldap_connection():
-    server = Server('192.168.43.54:389', get_info=ALL)
+    server = Server('192.168.1.53:389', get_info=ALL)
     conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
 
@@ -55,8 +57,20 @@ class User:
             print(cert_base64)
             cert_pem = _get_pem_from_der(cert_base64)
             print(cert_pem)
-            CA.verify(cert_pem)
-            return "success", 200
+            certificate_obj = CA.verify(cert_pem)
+            if certificate_obj is not None:
+                subject = str(certificate_obj.get_subject()).split('CN=')[1].split('\'')[0]
+                # issuer = str(certificate_obj.get_issuer())
+                # pubkey = str(certificate_obj.get_pubkey())
+                # algo = str(certificate_obj.get_signature_algorithm())
+                print(subject)
+                if subject == username:
+                    print("username and the certificate subject are identical")
+                    expires = datetime.timedelta(days=30)
+                    access_token = create_access_token(identity=str(subject), expires_delta=expires)
+                    return {'token': access_token}, 200
+                return "username and the certificate subject are not identical", 400
+            return 'invalid certificate', 400
 
     @staticmethod
     def try_signup(cn, givenName, sn, telephoneNumber, userPassword):
