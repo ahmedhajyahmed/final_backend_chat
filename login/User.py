@@ -5,6 +5,7 @@ import os
 import textwrap
 import uuid
 
+import OpenSSL
 from OpenSSL import crypto
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -77,14 +78,18 @@ class User:
         #                              path=path)
 
         # print(userCertificateRequest)
-        csr = crypto.load_certificate_request(crypto.FILETYPE_PEM, userCertificateRequest)
-        # csr = x509.load_pem_x509_csr(userCertificateRequest, default_backend())
+        # csr = crypto.load_certificate_request(crypto.FILETYPE_PEM, userCertificateRequest)
+        try:
+            csr = x509.load_pem_x509_csr(bytes(userCertificateRequest, 'utf-8'), default_backend())
+        except:
+            print('CSR INVALID')
+            return 400
         # pubkeyString = crypto.dump_publickey(crypto.FILETYPE_PEM, csr.get_pubkey())
-        print(csr.get_subject())
+        print(csr.subject)
         signed = CA.sign(csr, path)
 
         # file = open('cert.crt', 'rb').read()
-        # pem_cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, signed)
+        pem_cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, signed)
         cert_der = crypto.dump_certificate(crypto.FILETYPE_ASN1, signed)
         # print(cert)
         conn = get_ldap_connection()
