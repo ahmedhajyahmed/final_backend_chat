@@ -1,4 +1,5 @@
 import json
+
 from flask import request
 
 from login import User
@@ -24,10 +25,12 @@ class Authentication:
         sn = user_data['sn']
         telephoneNumber = user_data['telephoneNumber']
         userPassword = user_data['userPassword']
+        csr_pem = user_data['userCertificateRequest']
 
         result = User.try_signup(cn=cn,
                                  givenName=givenName,
                                  sn=sn,
                                  telephoneNumber=telephoneNumber,
-                                 userPassword=userPassword)
+                                 userPassword=userPassword,
+                                 userCertificateRequest=csr_pem)
         return result

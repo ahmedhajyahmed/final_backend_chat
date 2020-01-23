@@ -2,13 +2,11 @@
 import os
 
 from flask import Flask
-from flask_jwt_extended import JWTManager, jwt_required
-from flask_restful import Resource, Api, reqparse, abort
-from flask.views import MethodView
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager, jwt_required
+from flask_restful import Resource, Api
 
 from Auth import Authentication
-from login.User import User
 
 app = Flask(__name__)
 JWT_SECRET_KEY = 't1NP63m4wnBg6nyHYKfmc2TpCOGI4nss'
@@ -37,7 +35,7 @@ class Login(Resource):
 
 class Signup(Resource):
     def post(self):
-
+        print('jesuis ici')
         return authentication.signup()
 
 

@@ -1,37 +1,25 @@
 import ast
-import base64
+import datetime
 import hashlib
-import json
 import os
 import textwrap
 import uuid
-import datetime
-
 
 from OpenSSL import crypto
-from flask_jwt_extended import create_access_token
-
-from ldap3 import Server, Connection, ALL
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-
-from cryptography.x509.oid import NameOID
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import (Encoding, PrivateFormat, NoEncryption)
-from cryptography.x509 import NameOID
-from cryptography import x509
-from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
+from flask_jwt_extended import create_access_token
+from ldap3 import Server, Connection, ALL
 
 from CA import CA
 
 
 def get_ldap_connection():
-    server = Server('192.168.1.53:389', get_info=ALL)
+    server = Server('192.168.43.54:389', get_info=ALL)
     conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
 
@@ -73,7 +61,7 @@ class User:
             return 'invalid certificate', 400
 
     @staticmethod
-    def try_signup(cn, givenName, sn, telephoneNumber, userPassword):
+    def try_signup(cn, givenName, sn, telephoneNumber, userPassword, userCertificateRequest):
 
         uid = generate_random_id()
         path = 'clients/' + uid + '-' + cn
@@ -84,10 +72,15 @@ class User:
 
         private_key = generate_private_key()
         write_private_key(private_key, path=path)
-        csr = generate_and_write_csr(private_key=private_key,
-                                     COMMON_NAME=cn,
-                                     path=path)
+        # csr = generate_and_write_csr(private_key=private_key,
+        #                              COMMON_NAME=cn,
+        #                              path=path)
 
+        # print(userCertificateRequest)
+        csr = crypto.load_certificate_request(crypto.FILETYPE_PEM, userCertificateRequest)
+        # csr = x509.load_pem_x509_csr(userCertificateRequest, default_backend())
+        # pubkeyString = crypto.dump_publickey(crypto.FILETYPE_PEM, csr.get_pubkey())
+        print(csr.get_subject())
         signed = CA.sign(csr, path)
 
         # file = open('cert.crt', 'rb').read()
@@ -97,18 +90,18 @@ class User:
         conn = get_ldap_connection()
 
         conn.add('cn=%s,ou=myusers,dc=chatroom,dc=com' % cn, 'inetOrgPerson', {'givenName': givenName,
-                                                                            'sn': sn,
-                                                                            'telephoneNumber': telephoneNumber,
-                                                                            'userPassword': hashlib.sha256(
-                                                                                userPassword.encode()).hexdigest(),
-                                                                            'uid': uid,
-                                                                            'userCertificate;binary': cert_der
-                                                                            # 'userSMIMECertifcate': cert_der
-                                                                            })
+                                                                               'sn': sn,
+                                                                               'telephoneNumber': telephoneNumber,
+                                                                               'userPassword': hashlib.sha256(
+                                                                                   userPassword.encode()).hexdigest(),
+                                                                               'uid': uid,
+                                                                               'userCertificate;binary': cert_der
+                                                                               # 'userSMIMECertifcate': cert_der
+                                                                               })
         # cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, pem_cert)
 
         result = conn.result['description']
-        if result == 'sucess':
+        if result == 'success':
             # print(conn.result.entry_to_json())
             return 'Success', 200
         else:
@@ -175,10 +168,11 @@ def generate_and_write_csr(private_key, path, COMMON_NAME, COUNTRY_NAME="TN", ST
 def generate_random_id():
     return str(uuid.uuid4())[:8]
 
+
 def _get_pem_from_der(der):
     """
     Converts DER certificate to PEM.
     """
     return "\n".join(("-----BEGIN CERTIFICATE-----",
-        "\n".join(textwrap.wrap(der, 64)),
-        "-----END CERTIFICATE-----",))
+                      "\n".join(textwrap.wrap(der, 64)),
+                      "-----END CERTIFICATE-----",))
