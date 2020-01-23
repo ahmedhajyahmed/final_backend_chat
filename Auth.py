@@ -11,7 +11,7 @@ class Authentication:
     def login(self):
         user_data = json.loads(request.data)
         print(user_data)
-        username = user_data['username']
+        username = user_data['cn']
         password = user_data['password']
         result = User.try_login(username, password)
         return result

@@ -26,6 +26,16 @@ def get_ldap_connection():
 
 
 class User:
+    uid = 0
+    cn = 0
+    sn = 0
+    pubkey = 0
+
+    def __init__(self, cn, sn, uid, pubkey):
+        self.cn = cn
+        self.sn = sn
+        self.uid = uid
+        self.pubkey = pubkey
 
     @staticmethod
     def try_login(username, password):
@@ -49,15 +59,20 @@ class User:
             certificate_obj = CA.verify(cert_pem)
             if certificate_obj is not None:
                 subject = str(certificate_obj.get_subject()).split('CN=')[1].split('\'')[0]
-                # issuer = str(certificate_obj.get_issuer())
-                # pubkey = str(certificate_obj.get_pubkey())
-                # algo = str(certificate_obj.get_signature_algorithm())
+                issuer = str(certificate_obj.get_issuer()).split('CN=')[1].split('/')[0]
+                signature_algorithm = certificate_obj.get_signature_algorithm().decode()
                 print(subject)
                 if subject == username:
                     print("username and the certificate subject are identical")
                     expires = datetime.timedelta(days=30)
                     access_token = create_access_token(identity=str(subject), expires_delta=expires)
-                    return {'token': access_token}, 200
+                    return {
+                            'token': access_token,
+                            'certificate': cert_pem,
+                            'subject': subject,
+                            'issuer': issuer,
+                            'signature_algorithm': signature_algorithm
+                           }, 200
                 return "username and the certificate subject are not identical", 400
             return 'invalid certificate', 400
 
@@ -89,7 +104,7 @@ class User:
         signed = CA.sign(csr, path)
 
         # file = open('cert.crt', 'rb').read()
-        pem_cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, signed)
+        # pem_cert = OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, signed)
         cert_der = crypto.dump_certificate(crypto.FILETYPE_ASN1, signed)
         # print(cert)
         conn = get_ldap_connection()
@@ -123,6 +138,27 @@ class User:
 
     def get_id(self):
         return self.id
+
+
+def get_all_users():
+    conn = get_ldap_connection()
+    conn.search('ou=myusers,dc=chatroom,dc=com', '(objectclass=inetOrgPerson)',
+                attributes=['cn', 'sn', 'userCertificate', 'uid'])
+    users = []
+    for entry in conn.entries:
+        entry_dict = ast.literal_eval(entry.entry_to_json())
+        # print(entry_dict['attributes'])
+        pubkey = get_pubkey_from_certifcate(entry_dict['attributes']['userCertificate'])
+        user = User(entry_dict['attributes']['cn'], entry_dict['attributes']['sn'], entry_dict['attributes']['uid'], pubkey)
+        users.append(user)
+    return users
+
+
+def get_pubkey_from_certifcate(cert_base64):
+    cert_pem = _get_pem_from_der(cert_base64)
+    certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+    pubkey = certificate.get_pubkey()
+    return pubkey
 
 
 def generate_private_key():

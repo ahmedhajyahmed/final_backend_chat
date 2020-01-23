@@ -80,7 +80,6 @@ class CA:
         # traitement ici
         certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
 
-
         # Create and fill a X509Sore with trusted certs
         store = crypto.X509Store()
         for trusted_cert_pem in trusted_cert_pems:
