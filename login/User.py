@@ -4,8 +4,6 @@ import hashlib
 import os
 import textwrap
 import uuid
-
-import OpenSSL
 from OpenSSL import crypto
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -13,9 +11,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+from flask import jsonify
 from flask_jwt_extended import create_access_token
 from ldap3 import Server, Connection, ALL
-
 from CA import CA
 
 
@@ -26,44 +24,41 @@ def get_ldap_connection():
 
 
 class User:
-    uid = 0
-    cn = 0
-    sn = 0
-    pubkey = 0
-
-    def __init__(self, cn, sn, uid, pubkey):
-        self.cn = cn
-        self.sn = sn
-        self.uid = uid
-        self.pubkey = pubkey
 
     @staticmethod
     def try_login(username, password):
-
+        """
+            step1 : searching for the entry in LDAP using the cn and the userPassword.
+            """
         conn = get_ldap_connection()
         print('get connection')
-        # conn.search('ou=Users,dc=example,dc=com', '(&(cn=%s)(userPassword=%s))' % (username, password))
+        # encrypting password with sha256 algorithm for LDAP persistence
         password = hashlib.sha256(password.encode()).hexdigest()
+        # searching for the LDAP entry
         conn.search('dc=chatroom,dc=com', '(&(cn=%s)(userPassword=%s))' % (username, password),
                     attributes=['userCertificate'])
         if conn.entries == []:
-            return 'error not auth', 400
+            return 'error no entry found', 400
         else:
-            result_str = conn.entries[0].entry_to_json()
-            # print(json.loads(res.read()))
-            result_dict = ast.literal_eval(result_str)
-            cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
-            print(cert_base64)
-            cert_pem = _get_pem_from_der(cert_base64)
-            print(cert_pem)
+            """
+                 step2 : extracting the userCertificate from LDAP and verifying its validity.
+                """
+            # returning a pem format certificate from the research output
+            cert_pem = get_certificate_from_entry(conn.entries[0])
+            # verification of the certificate using the CA certificate and the CA private Key
             certificate_obj = CA.verify(cert_pem)
             if certificate_obj is not None:
+                """
+                    step2 : extracting the subject from the certificate and comparing it with the username.
+                     """
+                # extracting the subject, the issuer and the signature algorithm
                 subject = str(certificate_obj.get_subject()).split('CN=')[1].split('\'')[0]
                 issuer = str(certificate_obj.get_issuer()).split('CN=')[1].split('/')[0]
                 signature_algorithm = certificate_obj.get_signature_algorithm().decode()
-                print(subject)
+                # print(subject)
                 if subject == username:
                     print("username and the certificate subject are identical")
+                    # generating the token
                     expires = datetime.timedelta(days=30)
                     access_token = create_access_token(identity=str(subject), expires_delta=expires)
                     return {
@@ -79,15 +74,12 @@ class User:
     @staticmethod
     def try_signup(cn, givenName, sn, telephoneNumber, userPassword, userCertificateRequest):
 
+        # generating a random uid
         uid = generate_random_id()
         path = 'clients/' + uid + '-' + cn
         os.mkdir(path, 777)
-
-        # print(uid)
-        # print(path)
-
-        private_key = generate_private_key()
-        write_private_key(private_key, path=path)
+        # private_key = generate_private_key()
+        # write_private_key(private_key, path=path)
         # csr = generate_and_write_csr(private_key=private_key,
         #                              COMMON_NAME=cn,
         #                              path=path)
@@ -127,31 +119,28 @@ class User:
         else:
             return result, 400
 
-    def is_authenticated(self):
-        return True
-
-    def is_active(self):
-        return True
-
-    def is_anonymous(self):
-        return False
-
-    def get_id(self):
-        return self.id
-
 
 def get_all_users():
     conn = get_ldap_connection()
     conn.search('ou=myusers,dc=chatroom,dc=com', '(objectclass=inetOrgPerson)',
-                attributes=['cn', 'sn', 'userCertificate', 'uid'])
+                attributes=['cn', 'sn', 'userCertificate', 'uid', 'userCertificate;binary'])
     users = []
     for entry in conn.entries:
-        entry_dict = ast.literal_eval(entry.entry_to_json())
-        # print(entry_dict['attributes'])
-        pubkey = get_pubkey_from_certifcate(entry_dict['attributes']['userCertificate'])
-        user = User(entry_dict['attributes']['cn'], entry_dict['attributes']['sn'], entry_dict['attributes']['uid'], pubkey)
+        result_str = entry.entry_to_json()
+        result_dict = ast.literal_eval(result_str)
+        cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
+        # print(cert_base64)
+        pubkey = get_pubkey_from_certifcate(cert_base64)
+        pubkey_str = crypto.dump_publickey(crypto.FILETYPE_PEM, pubkey).decode()
+        # print(pubkey_str)
+        user = {
+                'cn': result_dict['attributes']['cn'],
+                'sn': result_dict['attributes']['sn'],
+                'uid': result_dict['attributes']['uid'],
+                'pubkey': pubkey_str
+            }
         users.append(user)
-    return users
+    return jsonify(users)
 
 
 def get_pubkey_from_certifcate(cert_base64):
@@ -159,6 +148,20 @@ def get_pubkey_from_certifcate(cert_base64):
     certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
     pubkey = certificate.get_pubkey()
     return pubkey
+
+
+def get_certificate_from_entry(entry):
+    result_str = entry.entry_to_json()
+    # print(json.loads(res.read()))
+    # converting the result to dictionary format
+    result_dict = ast.literal_eval(result_str)
+    # getting the certificate in 64base format
+    cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
+    # print(cert_base64)
+    # converting der format certificate to pem format certificate + adding the header and the footer of the certificate
+    cert_pem = _get_pem_from_der(cert_base64)
+    # print(cert_pem)
+    return cert_pem
 
 
 def generate_private_key():

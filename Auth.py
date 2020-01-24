@@ -1,7 +1,5 @@
 import json
-
 from flask import request
-
 from login import User
 from login.User import User
 
