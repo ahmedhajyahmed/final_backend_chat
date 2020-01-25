@@ -38,7 +38,7 @@ class User:
         password = hashlib.sha256(password.encode()).hexdigest()
         # searching for the LDAP entry
         conn.search('dc=chatroom,dc=com', '(&(cn=%s)(userPassword=%s))' % (username, password),
-                    attributes=['userCertificate'])
+                    attributes=['userCertificate', 'givenName', 'sn', 'uid'])
         if conn.entries == []:
             return 'error no entry found', 400
         else:
@@ -46,7 +46,7 @@ class User:
                  step2 : extracting the userCertificate from LDAP and verifying its validity.
                 """
             # returning a pem format certificate from the research output
-            cert_pem = get_certificate_from_entry(conn.entries[0])
+            cert_pem, uid, sn, givenName = get_certificate_uid_sn_givenName_from_entry(conn.entries[0])
             # verification of the certificate using the CA certificate and the CA private Key
             certificate_obj = CA.verify(cert_pem)
             if certificate_obj is not None:
@@ -71,7 +71,10 @@ class User:
                     return {
                             'token': access_token,
                             'certificate': cert_pem,
-                            'subject': subject,
+                            'cn': subject,
+                            'givenName': givenName,
+                            'sn': sn,
+                            'uid': uid,
                             'issuer': issuer,
                             'signature_algorithm': signature_algorithm,
                             'pubkey': pubkey_str
@@ -164,18 +167,21 @@ def get_pubkey_from_certifcate_pem(cert_pem):
     return pubkey
 
 
-def get_certificate_from_entry(entry):
+def get_certificate_uid_sn_givenName_from_entry(entry):
     result_str = entry.entry_to_json()
     # print(json.loads(res.read()))
     # converting the result to dictionary format
     result_dict = ast.literal_eval(result_str)
     # getting the certificate in 64base format
     cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
+    uid = result_dict['attributes']['uid']
+    sn = result_dict['attributes']['sn']
+    givenName = result_dict['attributes']['givenName']
     # print(cert_base64)
     # converting der format certificate to pem format certificate + adding the header and the footer of the certificate
     cert_pem = _get_pem_from_der(cert_base64)
     # print(cert_pem)
-    return cert_pem
+    return cert_pem, uid, sn, givenName
 
 
 def generate_private_key():
