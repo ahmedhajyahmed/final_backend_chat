@@ -18,7 +18,9 @@ from CA import CA
 
 
 def get_ldap_connection():
-    server = Server('192.168.162.132:389', get_info=ALL)
+
+    server = Server('192.168.43.39:389', get_info=ALL)
+
     conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
 
@@ -52,7 +54,10 @@ class User:
                     step2 : extracting the subject from the certificate and comparing it with the username.
                      """
                 # extracting the subject, the issuer and the signature algorithm
-                subject = str(certificate_obj.get_subject()).split('CN=')[1].split('\'')[0]
+                subject = str(certificate_obj.get_subject()).split('CN=')[1].split('/')[0]
+                # print('verification mta3 username')
+                # print(subject)
+                # print(username)
                 issuer = str(certificate_obj.get_issuer()).split('CN=')[1].split('/')[0]
                 signature_algorithm = certificate_obj.get_signature_algorithm().decode()
                 # print(subject)
