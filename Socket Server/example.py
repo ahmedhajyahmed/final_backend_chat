@@ -45,7 +45,7 @@ def broadcast_user_infos(user):
     print(user)
     if check_new_user(user):
         emit('USER_CONNECTED', users, broadcast=True)
-        emit('sendUsers',users)
+
 
 
 @socketio.on('disconnect', namespace='/test')
