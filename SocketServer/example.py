@@ -26,7 +26,7 @@ def send(message):
 
 @socketio.on('connect', namespace='/test')
 def test_connect():
-    print("a new client connected")
+    print("a client connected")
 
 
 def check_new_user(new_user):
