@@ -19,7 +19,7 @@ from CA import CA
 
 def get_ldap_connection():
 
-    server = Server('192.168.162.132:389', get_info=ALL)
+    server = Server('192.168.43.39:389', get_info=ALL)
 
     conn = Connection(server, 'cn=admin,dc=chatroom,dc=com', 'root', auto_bind=True)
     return conn
@@ -145,9 +145,9 @@ def get_all_users():
         pubkey_str = crypto.dump_publickey(crypto.FILETYPE_PEM, pubkey).decode()
         # print(pubkey_str)
         user = {
-                'cn': result_dict['attributes']['cn'],
-                'sn': result_dict['attributes']['sn'],
-                'uid': result_dict['attributes']['uid'],
+                'cn': result_dict['attributes']['cn'][0],
+                'sn': result_dict['attributes']['sn'][0],
+                'uid': result_dict['attributes']['uid'][0],
                 'pubkey': pubkey_str
             }
         users.append(user)
@@ -174,9 +174,9 @@ def get_certificate_uid_sn_givenName_from_entry(entry):
     result_dict = ast.literal_eval(result_str)
     # getting the certificate in 64base format
     cert_base64 = result_dict['attributes']['userCertificate;binary'][0]['encoded']
-    uid = result_dict['attributes']['uid']
-    sn = result_dict['attributes']['sn']
-    givenName = result_dict['attributes']['givenName']
+    uid = result_dict['attributes']['uid'][0]
+    sn = result_dict['attributes']['sn'][0]
+    givenName = result_dict['attributes']['givenName'][0]
     # print(cert_base64)
     # converting der format certificate to pem format certificate + adding the header and the footer of the certificate
     cert_pem = _get_pem_from_der(cert_base64)
