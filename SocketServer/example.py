@@ -43,8 +43,8 @@ def check_new_user(new_user):
 def broadcast_user_infos(user):
     print("a new client gave his infos")
     print(user)
-    if check_new_user(user):
-        emit('USER_CONNECTED', users, broadcast=True)
+    check_new_user(user)
+    emit('USER_CONNECTED', users, broadcast=True)
 
 
 
