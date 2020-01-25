@@ -55,6 +55,8 @@ class User:
                      """
                 # extracting the subject, the issuer and the signature algorithm
                 subject = str(certificate_obj.get_subject()).split('CN=')[1].split('/')[0]
+                pubkey = get_pubkey_from_certifcate_pem(cert_pem)
+                pubkey_str = crypto.dump_publickey(crypto.FILETYPE_PEM, pubkey).decode()
                 # print('verification mta3 username')
                 # print(subject)
                 # print(username)
@@ -71,7 +73,8 @@ class User:
                             'certificate': cert_pem,
                             'subject': subject,
                             'issuer': issuer,
-                            'signature_algorithm': signature_algorithm
+                            'signature_algorithm': signature_algorithm,
+                            'pubkey': pubkey_str
                            }, 200
                 return "username and the certificate subject are not identical", 400
             return 'invalid certificate', 400
@@ -150,6 +153,12 @@ def get_all_users():
 
 def get_pubkey_from_certifcate(cert_base64):
     cert_pem = _get_pem_from_der(cert_base64)
+    certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
+    pubkey = certificate.get_pubkey()
+    return pubkey
+
+
+def get_pubkey_from_certifcate_pem(cert_pem):
     certificate = crypto.load_certificate(crypto.FILETYPE_PEM, cert_pem)
     pubkey = certificate.get_pubkey()
     return pubkey
